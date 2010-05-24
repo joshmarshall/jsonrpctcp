@@ -24,7 +24,7 @@ class Server(object):
         self.pool = pool
         self.json_request = JSONRequest(self)
         if handler:
-            assert issubclass(handler, collection.Callable) or \
+            assert issubclass(handler, collections.Callable) or \
                 issubclass(handler, Handler)
             self.json_request.add_handler(handler)
         
