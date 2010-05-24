@@ -1,0 +1,116 @@
+JSONRPCTCP
+==========
+
+This project is just an implementation of the JSON-RPC protocol over
+TCP. It should support most of the JSON-RPC 2.0 specification, but it is 
+not (at this point) backwards-compatible with 1.0, because I don't like it 
+as much. :) It's early on, so feedback is greatly desired.
+
+JSONRPCTCP is licensed under the Apache Licence, Version 2.0
+(http://www.apache.org/licenses/LICENSE-2.0.html).
+
+Requirements
+============
+* Python 2.5+
+* SimpleJSON on Python < 2.6
+
+Installation
+============
+
+    python setup.py build
+    sudo python setup.py install
+    
+Client Usage
+============
+
+This should be pretty familiar to users of xmlrpclib, with only a few
+name differences.
+
+Client examples:
+
+    # Simple example
+    from jsonrpctcp import connect
+    
+    conn = connect('localhost', 8080)
+    result = conn.add(1, 2)
+    # ...and should be 3, except for extremely large values of 2. :)
+    
+    # Notification example
+    conn._notify.add(5, 6)
+    # Null response, because it's a notification.
+    
+    # Batch example
+    batch = conn._batch()
+    batch.add(y=5, x=6)
+    batch._notify.add(6,4)
+    batch.namespace.echo("Repeat me!")
+    result = batch()
+    for i in result:
+        print i
+    # Should print out 11, and then "Repeat me!", skippinig the notification.
+    
+    # You can access the request and response data with
+    # conn._response and conn._request -- only AFTER a request is made.
+    
+
+Server Usage
+============
+
+The server is bound to a socket, and the handler function(s) can be passed 
+in manually one by one, or (preferred) you can subclass the Handler object
+and use that. It threads (not forks) the individual requests for you, but
+if you don't use the start_server() shortcut, you'll have to thread the 
+actual server startup yourself if you want to do anything after it starts.
+
+Server examples:
+
+    # Handler example
+    from jsonrpctcp import start_server
+    from jsonrpctcp.handler import Handler
+    import time
+    
+    class NewHandler(Handler):
+        def echo(self, message):
+            return message
+   
+    # This automatically threads the server instance.     
+    server = start_server('localhost', 8080, NewHandler)
+    
+    while True:
+        # Do whatever you need for polling
+        time.sleep(5)
+        
+    ------------------
+        
+    # Handler example
+    from jsonrpctcp.server import Server
+    from jsonrpctcp import config
+    
+    config.verbose = True
+            
+    def add(x, y):
+        return x+y
+        
+    def echo(message):
+        return message
+        
+    server = Server(('localhost', 8080))
+    server.add_handler(add)
+    server.add_handler(echo, 'namespace.echo')
+    server.serve()
+    
+    # You'll have to thread the start up yourself this way, if you need it.
+    
+Configuration
+=============
+
+There's a simple configuration object that has three attributes. You can
+change them per the following:
+
+    from jsonrpctcp import config
+    
+    config.verbose = True # default is False
+    config.timeout = 30 # default is 5
+    config.buffer = 4096 # default is 1024
+    
+These may not be the best defaults, any thoughts would be appreciated.
