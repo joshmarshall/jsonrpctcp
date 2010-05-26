@@ -16,7 +16,6 @@ class Client(object):
         
     def __getattr__(self, key):
         if key.startswith('_'):
-            print key
             raise AttributeError('Methods that start with _ are not allowed.')
         req_id = u'%s' % uuid.uuid4()
         request = ClientRequest(self, namespace=key, req_id=req_id)
@@ -67,6 +66,9 @@ class Client(object):
                 ids.append(request['id'])
         self._request = requests
         responses = self._send_and_receive(requests)
+        if not responses:
+            yield None
+            raise StopIteration
         self._responses = responses
         assert type(responses) is list
         response_by_id = {}
@@ -102,7 +104,10 @@ class Client(object):
         sock.close()
         if config.verbose:
             print 'RESPONSE:', response
-        obj = json.loads(response)
+        try:
+            obj = json.loads(response)
+        except ValueError:
+            return None
         return obj
         
     def _validate_response(self, response):
@@ -110,8 +115,8 @@ class Client(object):
         response_id = response.has_key('id')
         result = response.has_key('result')
         error = response.has_key('error')
-        if not jsonrpc or not response_id or not result:
-            raise Exception('Server returned invalid results.')
+        if not jsonrpc or not response_id or (not result and not error):
+            raise Exception('Server returned an error.')
         if error:
             raise Exception('ERROR %d: %s' % (
                 response['error']['code'], 
