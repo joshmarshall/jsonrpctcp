@@ -2,6 +2,7 @@ import socket
 import json
 import uuid
 from config import config
+from logger import logger
 
 class Client(object):
 
@@ -81,6 +82,7 @@ class Client(object):
     
     def _send_and_receive(self, request):
         message = json.dumps(request)
+        logger.debug('REQUEST: %s' % request)
         if config.verbose:
             print 'REQUEST:', request
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -102,6 +104,7 @@ class Client(object):
             if len(response) < config.buffer:
                 break
         sock.close()
+        logger.debug('RESPONSE: %s' % response)
         if config.verbose:
             print 'RESPONSE:', response
         try:

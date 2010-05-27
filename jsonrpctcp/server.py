@@ -7,6 +7,7 @@ import collections
 from handler import Handler
 from inspect import isclass
 from config import config
+from logger import logger
 
 try:
     import json
@@ -114,6 +115,7 @@ class ProcessRequest(object):
             if not data: break
             self.data += data
             if len(data) < config.buffer: break
+        logger.debug('REQUEST: %s' % self.data)
         if config.verbose:
             print 'REQUEST:', self.data
         if self.socket_error:
@@ -121,6 +123,7 @@ class ProcessRequest(object):
         else:
             response = self.parse_request()
             if response:
+                logger.debug('RESPONSE: %s' % response)
                 if config.verbose:
                     print 'RESPONSE:', response
                 self.socket.send(response) 
@@ -190,7 +193,12 @@ class ProcessRequest(object):
             try:
                 response = handler(*params, **kwargs)
                 return self.response(response, request_id)
+            except TypeError:
+                logger.warning('TypeError when calling handler %s' % method)
+                logger.debug(traceback.format_exc().splitlines()[-1])
+                return self.error(-32603, request_id)
             except:
+                logger.error('Error calling handler %s' % method)
                 traceback.print_exc()
                 return self.error(-32603, request_id)
         return self.error(-32601, request_id)
