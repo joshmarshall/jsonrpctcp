@@ -8,10 +8,10 @@ import socket
 import time
 import sys
 import traceback
-from handler import Handler
+from jsonrpctcp.handler import Handler
+from jsonrpctcp.config import config
+from jsonrpctcp.logger import logger
 from inspect import isclass
-from config import config
-from logger import logger
 
 try:
     import json

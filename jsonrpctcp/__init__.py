@@ -2,7 +2,7 @@
 JSONRPCTCP Library default imports
 """
 
-from client import connect
-from server import start_server
-from config import config
-from logger import logger
+from jsonrpctcp.client import connect
+from jsonrpctcp.server import start_server
+from jsonrpctcp.config import config
+from jsonrpctcp.logger import logger

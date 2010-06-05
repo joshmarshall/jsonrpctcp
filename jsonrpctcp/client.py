@@ -10,8 +10,9 @@ result = conn.tree.method(keyword=arg)
 
 import socket 
 import uuid
-from config import config
-from logger import logger
+from jsonrpctcp.config import config
+from jsonrpctcp.logger import logger
+
 try:
     import json
 except ImportError:
