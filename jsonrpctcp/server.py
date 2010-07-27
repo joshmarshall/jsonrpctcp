@@ -162,16 +162,12 @@ class ProcessRequest(object):
             if len(data) < config.buffer: 
                 break
         logger.debug('REQUEST: %s' % self.data)
-        if config.verbose:
-            print 'REQUEST:', self.data
         if self.socket_error:
             self.socket.close()
         else:
             response = self.parse_request()
             if response:
                 logger.debug('RESPONSE: %s' % response)
-                if config.verbose:
-                    print 'RESPONSE:', response
                 self.socket.send(response) 
         self.socket.close()
 
@@ -193,7 +189,7 @@ class ProcessRequest(object):
         try:
             obj = json.loads(self.data)
         except ValueError:
-            return self.error(-32700)
+            return generate_error(-32700)
         
         # If it's a batch request...
         if type(obj) is list:
@@ -212,7 +208,7 @@ class ProcessRequest(object):
         Parses a JSON request.
         """
         if type(obj) is not dict:
-            return self.error(-32600, force=True)
+            return generate_error(-32600, force=True)
             
         # Get ID, Notification if None
         # This is actually incorrect, as IDs can be null by spec (rare)
@@ -222,12 +218,12 @@ class ProcessRequest(object):
         jsonrpc = obj.get('jsonrpc', None)
         method = obj.get('method', None)
         if not jsonrpc or not method:
-            return self.error(-32600, request_id)
+            return generate_error(-32600, request_id)
         
         # Validate parameters
         params = obj.get('params', [])
         if type(params) not in (list, dict):
-            return self.error(-32602, request_id)
+            return generate_error(-32602, request_id)
         
         # Parse Request
         kwargs = {}
@@ -236,44 +232,48 @@ class ProcessRequest(object):
             params = []
         handler = self.json_request.get_handler(method)
         error_code = None
+        message = None
         if handler:
             try:
                 response = handler(*params, **kwargs)
-                return self.response(response, request_id)
+                return generate_response(response, request_id)
             except TypeError:
                 logger.warning('TypeError when calling handler %s' % method)
-                logger.debug(traceback.format_exc().splitlines()[-1])
+                message = traceback.format_exc().splitlines()[-1]
                 error_code = -32603
-            except:
+            except Exception:
                 logger.error('Error calling handler %s' % method)
-                logger.error(traceback.format_exc())
+                message = traceback.format_exc()
                 error_code = -32603
         else:
             error_code = -32601
-        return self.error(error_code, request_id)
+        return generate_error(error_code, request_id, message=message)
             
-    def response(self, value, request_id):
-        """
-        TODO: Fix so that a request_id can be Null and not a Notification.
-        """
-        if not request_id:
-            return None
-        response = {'jsonrpc':"2.0", 'result':value, 'id':request_id}
-        return response
-        
-    def error(self, code, request_id=None, force=True):
-        """
-        TODO: Fix so that a request_id can be Null and not a Notification.
-        """
-        if not request_id and not force:
-            return None
-        response = {
-            'jsonrpc':"2.0", 
-            'error':jsonrpc_errors.get(code), 
-            'id':request_id
-        }
-        return response
-        
+def generate_response(value, request_id):
+    """
+    TODO: Fix so that a request_id can be Null and not a Notification.
+    """
+    if not request_id:
+        return None
+    response = {'jsonrpc':"2.0", 'result':value, 'id':request_id}
+    return response
+    
+def generate_error(code, request_id=None, force=True, message=None):
+    """
+    TODO: Fix so that a request_id can be Null and not a Notification.
+    """
+    if not request_id and not force:
+        return None
+    response = {
+        'jsonrpc':"2.0", 
+        'error': {
+            'message': message or JSONRPC_ERRORS.get(code),
+            'code': code
+        },
+        'id':request_id
+    }
+    return response
+    
         
 def start_server(host, port, handler):
     """
@@ -288,7 +288,7 @@ def start_server(host, port, handler):
     
     
     
-jsonrpc_errors = {
+JSONRPC_ERRORS = {
     -32700: {'code':-32700, 'message':'Parse error.'},
     -32600: {'code':-32600, 'message':'Invalid request.'},
     -32601: {'code':-32601, 'message':'Method not found.'},
@@ -311,7 +311,10 @@ def test_server():
         return message
         
     if '-v' in sys.argv:
+        import logging
         config.verbose = True
+        logger.addHandler(logging.StreamHandler())
+        logger.setLevel(logging.DEBUG)
         
     server = Server((host, port))
     server.add_handler(echo)
@@ -326,8 +329,8 @@ def test_server():
         while True:
             time.sleep(2)
     except KeyboardInterrupt:
-        server.shutdown()
-    print 'Finished.'
+        print 'Finished.'
+        sys.exit()
     
     
 if __name__ == "__main__":

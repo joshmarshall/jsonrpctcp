@@ -114,3 +114,15 @@ change them per the following:
     config.buffer = 4096 # default is 1024
     
 These may not be the best defaults, any thoughts would be appreciated.
+
+Debugging
+=========
+
+If you want to see the actual requests, responses, etc. you'll need to
+add a handler and set a level to the jsonrpctcp logger. This uses the
+basic python logging module, so it should be fairly familiar:
+
+	import loggging
+	from jsonrpctcp.logger import logger
+	logger.addHandler(logging.StreamHandler()) # sends to stdout
+	logger.setLevel(logging.DEBUG)

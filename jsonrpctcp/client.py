@@ -124,8 +124,6 @@ class Client(object):
         """
         message = json.dumps(request)
         logger.debug('REQUEST: %s' % request)
-        if config.verbose:
-            print 'REQUEST:', request
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(config.timeout)
         sock.connect(self._addr)
@@ -147,8 +145,6 @@ class Client(object):
                 break
         sock.close()
         logger.debug('RESPONSE: %s' % response)
-        if config.verbose:
-            print 'RESPONSE:', response
         try:
             obj = json.loads(response)
         except ValueError:
@@ -273,6 +269,9 @@ def test_client():
     
 if __name__ == "__main__":
     import sys    
+    import logging
     if '-v' in sys.argv:
         config.verbose = True
+        logger.setLevel(logging.DEBUG)
+        logger.addHandler(logging.StreamHandler())
     test_client()

@@ -4,9 +4,20 @@ JSONRPCTCP library.
 """
 
 class Config(object):
-    """ The default values for the configuration. """
-    timeout = 5 # seconds
-    verbose = False
-    buffer = 1024
+    """ Simple object to hold jsonrpctcp configuration options """
+    _instance = None
     
-config = Config()
+    def __init__(self):
+        """ The default values for the configuration. """
+        self.timeout = 5 # seconds
+        self.verbose = False
+        self.buffer = 1024
+    
+    @classmethod
+    def instance(cls):
+        """ Retrieves singleton """
+        if not cls._instance:
+            cls._instance = cls()
+        return cls._instance
+    
+config = Config.instance()
