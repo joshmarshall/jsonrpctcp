@@ -19,7 +19,34 @@ Installation
 
     python setup.py build
     sudo python setup.py install
-    
+
+Tests
+=====
+The jsonrpctcp library contains nearly-verbatim tests from the
+JSON-RPC 2.0 Specification Document. 
+(http://groups.google.com/group/json-rpc/web/json-rpc-2-0)
+
+After installation, or from the same directory as the setup.py
+file and this README, you can run the tests like so:
+
+    python -m jsonrpctcp.tests
+
+If all is well, you should see 12ish tests that ran successfully.
+
+Additionally, you can spin up a test server in one terminal
+and run a few test client methods in another with the following
+instructions. (These tests are not as detailed, but it's there
+for whatever purpose.)
+
+Start server (hit Ctrl-C or Ctrl-Break in Windows to stop): 
+    python -m jsonrpctcp.server
+   
+Start client in another terminal:
+    python -m jsonrpctcp.client
+
+The client terminal should print out a short list of tests it
+performed.
+
 Client Usage
 ============
 
