@@ -10,8 +10,10 @@ result = conn.tree.method(keyword=arg)
 
 import socket 
 import uuid
-from jsonrpctcp.config import config
+from jsonrpctcp import config
+from jsonrpctcp import history
 from jsonrpctcp.logger import logger
+from jsonrpctcp.errors import ProtocolError
 
 try:
     import json
@@ -72,7 +74,7 @@ class Client(object):
         assert len(self._requests) > 0
         requests = []
         for req in self._requests:
-            requests.append(req._request)
+            requests.append(req._request())
         if not self._is_batch():
             result = self._call_single(requests[0])
         else:
@@ -85,7 +87,12 @@ class Client(object):
         Processes a single request, and returns the response.
         """
         self._request = request
-        response = self._send_and_receive(request)
+        message = json.dumps(request)
+        notify = False
+        if not request.has_key('id'):
+            notify = True
+        response_text = self._send_and_receive(message, notify=notify)
+        response = self._parse_response(response_text)
         if not response:
             return response
         self._response = response        
@@ -102,9 +109,15 @@ class Client(object):
             if request.has_key('id'):
                 ids.append(request['id'])
         self._request = requests
-        responses = self._send_and_receive(requests)
+        message = json.dumps(requests)
+        notify = False
+        if len(ids) == 0:
+            notify = True
+        response_text = self._send_and_receive(
+            message, batch=True, notify=notify
+        )
+        responses = self._parse_response(response_text)
         if not responses:
-            yield None
             raise StopIteration
         self._responses = responses
         assert type(responses) is list
@@ -116,39 +129,53 @@ class Client(object):
             validate_response(response)
             yield response['result']
     
-    def _send_and_receive(self, request):
+    def _send_and_receive(self, message, batch=False, notify=False):
         """
         Handles the socket connection, sends the JSON request, and
         (if not a notification) retrieves the response and decodes the
         JSON text.
         """
-        message = json.dumps(request)
-        logger.debug('REQUEST: %s' % request)
+        # Starting with a clean history
+        history.request = message
+        logger.debug('CLIENT | REQUEST: %s' % message)
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(config.timeout)
         sock.connect(self._addr)
         sock.send(message)
-        if type(request) is dict and not request.has_key('id'):
+        
+        response = ''
+        if notify:
             # single notification, we don't need a response.
             sock.close()
+        else:
+            while True:
+                try:
+                    data = sock.recv(config.buffer)
+                except socket.timeout:
+                    break
+                if not data: 
+                    break
+                response += data
+                if len(response) < config.buffer:
+                    break
+            sock.close()
+        logger.debug('CLIENT | RESPONSE: %s' % response)
+        history.response = response
+        return response
+        
+    def _parse_response(self, response):
+        if response == '':
             return None
-        response = ''
-        while True:
-            try:
-                data = sock.recv(config.buffer)
-            except socket.timeout:
-                break
-            if not data: 
-                break
-            response += data
-            if len(response) < config.buffer:
-                break
-        sock.close()
-        logger.debug('RESPONSE: %s' % response)
         try:
             obj = json.loads(response)
         except ValueError:
-            return None
+            raise ProtocolError(-32700)
+        if type(obj) is dict and obj.has_key('error'):
+            raise ProtocolError(
+                obj.get('error').get('code'),
+                obj.get('error').get('message'),
+                obj.get('error').get('data', None)
+            )
         return obj
            
 class ClientRequest(object):
@@ -164,7 +191,7 @@ class ClientRequest(object):
         self._namespace = namespace
         self._notify = notify
         self._req_id = req_id
-        self._request = None
+        self._params = None
 
     def __getattr__(self, key):
         if key.startswith('_'):
@@ -190,18 +217,21 @@ class ClientRequest(object):
         Forms a valid jsonrpc query, and passes it on to the parent
         Client, returning the response.
         """
+        self._params = params
+        if not self._client._is_batch():
+            return self._client()
+        # Add batch logic here
+        
+    def _request(self):
         request = {
             'jsonrpc':'2.0', 
             'method': self._namespace
         }
-        if params:
-            request['params'] = params
+        if self._params:
+            request['params'] = self._params
         if not self._notify:
             request['id'] = self._req_id
-        self._request = request
-        if not self._client._is_batch():
-            return self._client()
-        # Add batch logic here
+        return request
         
 def connect(host, port):
     """
@@ -213,7 +243,7 @@ def connect(host, port):
 def validate_response(response):
     """
     Parses the returned JSON object, verifies that it follows
-    the JSON-RPC spec, and chekcs for errors, raising exceptions
+    the JSON-RPC spec, and checks for errors, raising exceptions
     as necessary.
     """
     jsonrpc = response.has_key('jsonrpc')
@@ -221,12 +251,12 @@ def validate_response(response):
     result = response.has_key('result')
     error = response.has_key('error')
     if not jsonrpc or not response_id or (not result and not error):
-        raise Exception('Server returned an error.')
+        raise Exception('Server returned invalid response.')
     if error:
-        raise Exception('ERROR %d: %s' % (
+        raise ProtocolError(
             response['error']['code'], 
             response['error']['message']
-        ))
+        )
         
 def test_client():
     """

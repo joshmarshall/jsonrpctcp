@@ -7,10 +7,13 @@ import threading
 import socket
 import time
 import sys
+import types
 import traceback
 from jsonrpctcp.handler import Handler
-from jsonrpctcp.config import config
+from jsonrpctcp import config
 from jsonrpctcp.logger import logger
+from jsonrpctcp import history
+from jsonrpctcp.errors import ProtocolError, JSONRPC_ERRORS
 from inspect import isclass
 
 try:
@@ -143,7 +146,6 @@ class ProcessRequest(object):
 
     def __init__(self, json_request):
         self.json_request = json_request
-        self.data = ''
         self.socket = None
         self.client_address = None
         
@@ -154,22 +156,25 @@ class ProcessRequest(object):
         self.socket = sock
         self.socket.settimeout(config.timeout)
         self.client_address = addr
+        total_data = ''
         while True:
             data = self.get_data()
             if not data: 
                 break
-            self.data += data
+            total_data += data
             if len(data) < config.buffer: 
                 break
-        logger.debug('REQUEST: %s' % self.data)
+        history.request = total_data
+        logger.debug('SERVER | REQUEST: %s' % total_data)
         if self.socket_error:
             self.socket.close()
         else:
-            response = self.parse_request()
-            if response:
-                logger.debug('RESPONSE: %s' % response)
-                self.socket.send(response) 
+            response = self.parse_request(total_data)
+            history.response = response
+            logger.debug('SERVER | RESPONSE: %s' % response)
+            self.socket.send(response)
         self.socket.close()
+        #history.clear()
 
     def get_data(self):
         """ Retrieves a data chunk from the socket. """
@@ -184,31 +189,45 @@ class ProcessRequest(object):
             data = None
         return data
         
-    def parse_request(self):
+    def parse_request(self, data):
         """ Attempts to load the request, validates it, and calls it. """
         try:
-            obj = json.loads(self.data)
+            obj = json.loads(data)
         except ValueError:
-            return generate_error(-32700)
-        
-        # If it's a batch request...
-        if type(obj) is list:
-            responses = []
-            for req in obj:
-                response = self.parse_call(req)
-                if response:
-                    # Ignoring notifications
+            return json.dumps(ProtocolError(-32700).generate_error())
+        if not obj:
+            return json.dumps(ProtocolError(-32600).generate_error())
+        batch = True
+        if type(obj) is not list:
+            batch = False
+            obj = [obj,]
+        responses = []
+        for req in obj:
+            request_error = ProtocolError(-32600)
+            if type(req) is not dict:
+                responses.append(request_error.generate_error())
+            elif 'method' not in req.keys() or \
+                type(req['method']) not in types.StringTypes:
+                responses.append(request_error.generate_error())
+            else:
+                result = self.parse_call(req)
+                if req.has_key('id'):
+                    response = generate_response(result, id=req.get('id'))
                     responses.append(response)
+        if not responses:
+            # It's either a batch of notifications or a single
+            # notification, so return nothing.
+            return ''
+        else:
+            if not batch:
+                # Single request
+                responses = responses[0]
             return json.dumps(responses)
-        # If it's a single request...
-        return json.dumps(self.parse_call(obj))
         
     def parse_call(self, obj):
         """
         Parses a JSON request.
         """
-        if type(obj) is not dict:
-            return generate_error(-32600, force=True)
             
         # Get ID, Notification if None
         # This is actually incorrect, as IDs can be null by spec (rare)
@@ -218,12 +237,12 @@ class ProcessRequest(object):
         jsonrpc = obj.get('jsonrpc', None)
         method = obj.get('method', None)
         if not jsonrpc or not method:
-            return generate_error(-32600, request_id)
+            return ProtocolError(-32600)
         
         # Validate parameters
         params = obj.get('params', [])
         if type(params) not in (list, dict):
-            return generate_error(-32602, request_id)
+            return ProtocolError(-32602)
         
         # Parse Request
         kwargs = {}
@@ -236,43 +255,25 @@ class ProcessRequest(object):
         if handler:
             try:
                 response = handler(*params, **kwargs)
-                return generate_response(response, request_id)
-            except TypeError:
-                logger.warning('TypeError when calling handler %s' % method)
-                message = traceback.format_exc().splitlines()[-1]
-                error_code = -32603
+                return response
             except Exception:
                 logger.error('Error calling handler %s' % method)
                 message = traceback.format_exc()
                 error_code = -32603
         else:
             error_code = -32601
-        return generate_error(error_code, request_id, message=message)
+        return ProtocolError(error_code, message=message)
             
-def generate_response(value, request_id):
+def generate_response(result, **kwargs):
     """
     TODO: Fix so that a request_id can be Null and not a Notification.
     """
-    if not request_id:
-        return None
-    response = {'jsonrpc':"2.0", 'result':value, 'id':request_id}
-    return response
-    
-def generate_error(code, request_id=None, force=True, message=None):
-    """
-    TODO: Fix so that a request_id can be Null and not a Notification.
-    """
-    if not request_id and not force:
-        return None
-    response = {
-        'jsonrpc':"2.0", 
-        'error': {
-            'message': message or JSONRPC_ERRORS.get(code),
-            'code': code
-        },
-        'id':request_id
-    }
-    return response
+    if type(result) is ProtocolError:
+        return result.generate_error(**kwargs)
+    else:
+        response = {'jsonrpc':"2.0", "result":result}
+        response.update(kwargs)
+        return response
     
         
 def start_server(host, port, handler):
@@ -285,16 +286,6 @@ def start_server(host, port, handler):
     server_thread.daemon = True
     server_thread.start()
     return server
-    
-    
-    
-JSONRPC_ERRORS = {
-    -32700: {'code':-32700, 'message':'Parse error.'},
-    -32600: {'code':-32600, 'message':'Invalid request.'},
-    -32601: {'code':-32601, 'message':'Method not found.'},
-    -32602: {'code':-32602, 'message':'Invalid parameters.'},
-    -32603: {'code':-32603, 'message':'Internal error.'},
-}
     
 def test_server():
     """
@@ -327,7 +318,7 @@ def test_server():
     
     try:
         while True:
-            time.sleep(2)
+            time.sleep(0.5)
     except KeyboardInterrupt:
         print 'Finished.'
         sys.exit()
