@@ -21,18 +21,20 @@ from threading import Thread
 import signal
 import logging
 
+CLIENT = connect('127.0.0.1', 8000)
+
 class TestCompatibility(unittest.TestCase):
     
     def setUp(self):
-        self.client = connect('127.0.0.1', 8000)
+        pass 
         
     # Version 2.0 Tests
     
     def test_positional(self):
         """ Positional arguments in a single call """
-        result = self.client.subtract(23, 42)
+        result = CLIENT.subtract(23, 42)
         self.assertTrue(result == -19)
-        result = self.client.subtract(42, 23)
+        result = CLIENT.subtract(42, 23)
         self.assertTrue(result == 19)
         request = json.loads(history.request)
         response = json.loads(history.response)
@@ -48,9 +50,9 @@ class TestCompatibility(unittest.TestCase):
         
     def test_named(self):
         """ Named arguments in a single call """
-        result = self.client.subtract(subtrahend=23, minuend=42)
+        result = CLIENT.subtract(subtrahend=23, minuend=42)
         self.assertTrue(result == 19)
-        result = self.client.subtract(minuend=42, subtrahend=23)
+        result = CLIENT.subtract(minuend=42, subtrahend=23)
         self.assertTrue(result == 19)
         request = json.loads(history.request)
         response = json.loads(history.response)
@@ -67,7 +69,7 @@ class TestCompatibility(unittest.TestCase):
         
     def test_notification(self):
         """ Testing a notification (response should be null) """
-        result = self.client._notify.update(1, 2, 3, 4, 5)
+        result = CLIENT._notify.update(1, 2, 3, 4, 5)
         self.assertTrue(result == None)
         request = json.loads(history.request)
         response = history.response
@@ -79,7 +81,8 @@ class TestCompatibility(unittest.TestCase):
         self.assertTrue(response == verify_response)
         
     def test_non_existent_method(self):
-        self.assertRaises(ProtocolError, self.client.foobar)
+        """ Testing a non existent method (raises -32601) """
+        self.assertRaises(ProtocolError, CLIENT.foobar)
         request = json.loads(history.request)
         response = json.loads(history.response)
         verify_request = {
@@ -95,9 +98,10 @@ class TestCompatibility(unittest.TestCase):
         self.assertTrue(response == verify_response)
         
     def test_invalid_json(self):
+        """ Tests an invalid JSON string (raises -32700) """
         invalid_json = '{"jsonrpc": "2.0", "method": "foobar, '+ \
             '"params": "bar", "baz]'
-        response = self.client._send_and_receive(invalid_json)
+        response = CLIENT._send_and_receive(invalid_json)
         response = json.loads(history.response)
         verify_response = json.loads(
             '{"jsonrpc": "2.0", "error": {"code": -32700,'+
@@ -108,7 +112,7 @@ class TestCompatibility(unittest.TestCase):
         
     def test_invalid_request(self):
         invalid_request = '{"jsonrpc": "2.0", "method": 1, "params": "bar"}'
-        response = self.client._send_and_receive(invalid_request)
+        response = CLIENT._send_and_receive(invalid_request)
         response = json.loads(history.response)
         verify_response = json.loads(
             '{"jsonrpc": "2.0", "error": {"code": -32600, '+
@@ -120,7 +124,7 @@ class TestCompatibility(unittest.TestCase):
     def test_batch_invalid_json(self):
         invalid_request = '[ {"jsonrpc": "2.0", "method": "sum", '+ \
             '"params": [1,2,4], "id": "1"},{"jsonrpc": "2.0", "method" ]'
-        response = self.client._send_and_receive(
+        response = CLIENT._send_and_receive(
             invalid_request, batch=True
         )
         response = json.loads(history.response)
@@ -133,7 +137,7 @@ class TestCompatibility(unittest.TestCase):
         
     def test_empty_array(self):
         invalid_request = '[]'
-        response = self.client._send_and_receive(invalid_request)
+        response = CLIENT._send_and_receive(invalid_request)
         response = json.loads(history.response)
         verify_response = json.loads(
             '{"jsonrpc": "2.0", "error": {"code": -32600, '+
@@ -145,7 +149,7 @@ class TestCompatibility(unittest.TestCase):
     def test_nonempty_array(self):
         invalid_request = '[1,2]'
         request_obj = json.loads(invalid_request)
-        response = self.client._send_and_receive(invalid_request)
+        response = CLIENT._send_and_receive(invalid_request)
         response = json.loads(history.response)
         self.assertTrue(len(response) == len(request_obj))
         for resp in response:
@@ -157,7 +161,7 @@ class TestCompatibility(unittest.TestCase):
             self.assertTrue(resp == verify_resp)
         
     def test_batch(self):
-        multicall = self.client._batch()
+        multicall = CLIENT._batch()
         multicall.sum(1,2,4)
         multicall._notify.notify_hello(7)
         multicall.subtract(42,23)
@@ -169,7 +173,7 @@ class TestCompatibility(unittest.TestCase):
             map(lambda x:json.dumps(x), job_requests)
         )
         requests = json.loads(json_requests)
-        response_text = self.client._send_and_receive(json_requests, batch=True)
+        response_text = CLIENT._send_and_receive(json_requests, batch=True)
         responses = json.loads(response_text)
         
         verify_requests = json.loads("""[
@@ -218,8 +222,8 @@ class TestCompatibility(unittest.TestCase):
                     response['error']['message']
             self.assertTrue(response == verify_response)
         
-    def test_batch_notifications(self):    
-        multicall = self.client._batch()
+    def test_batch_notifications(self): 
+        multicall = CLIENT._batch()
         multicall._notify.notify_sum(1, 2, 4)
         multicall._notify.notify_hello(7)
         results = multicall()
@@ -243,7 +247,7 @@ class TestCompatibility(unittest.TestCase):
     # Other tests
     
     def test_namespace(self):
-        response = self.client.namespace.sum(1,2,4)
+        response = CLIENT.namespace.sum(1,2,4)
         request = json.loads(history.request)
         response = json.loads(history.response)
         verify_request = {

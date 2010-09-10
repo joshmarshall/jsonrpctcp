@@ -258,7 +258,7 @@ class ProcessRequest(object):
                 return response
             except Exception:
                 logger.error('Error calling handler %s' % method)
-                message = traceback.format_exc()
+                message = traceback.format_exc().splitlines()[-1]
                 error_code = -32603
         else:
             error_code = -32601
@@ -301,6 +301,9 @@ def test_server():
         """
         return message
         
+    def summation(*args):
+        return sum(args)
+        
     if '-v' in sys.argv:
         import logging
         config.verbose = True
@@ -310,6 +313,7 @@ def test_server():
     server = Server((host, port))
     server.add_handler(echo)
     server.add_handler(echo, 'tree.echo')
+    server.add_handler(summation, 'sum')
     server_thread = threading.Thread(target=server.serve)
     server_thread.daemon = True
     server_thread.start()

@@ -34,7 +34,6 @@ class Client(object):
         self._addr = addr
         self._requests = []
         self.__batch = batch
-        self._responses = None
         
     def __getattr__(self, key):
         if key.startswith('_'):
@@ -73,8 +72,9 @@ class Client(object):
     def __call__(self):
         assert len(self._requests) > 0
         requests = []
-        for req in self._requests:
-            requests.append(req._request())
+        for i in range(len(self._requests)):
+            request = self._requests.pop(0)
+            requests.append(request._request())
         if not self._is_batch():
             result = self._call_single(requests[0])
         else:
@@ -117,17 +117,10 @@ class Client(object):
             message, batch=True, notify=notify
         )
         responses = self._parse_response(response_text)
-        if not responses:
-            raise StopIteration
-        self._responses = responses
+        if responses is None:
+            responses = []
         assert type(responses) is list
-        response_by_id = {}
-        for response in responses:
-            response_by_id[response.get('id', None)] = response
-        for request_id in ids:
-            response = response_by_id.get(request_id)
-            validate_response(response)
-            yield response['result']
+        return BatchResponses(responses, ids)
     
     def _send_and_receive(self, message, batch=False, notify=False):
         """
@@ -177,6 +170,40 @@ class Client(object):
                 obj.get('error').get('data', None)
             )
         return obj
+        
+class BatchResponses(object):
+    """ 
+    This is just a wrapper around the responses so you can 
+    iterate or retrieve by single id.
+    """
+    
+    def __init__(self, responses, ids):
+        self.responses = responses
+        self.ids = ids        
+        response_by_id = {}
+        for response in responses:
+            response_id = response.get('id', None)
+            response_by_id.setdefault(response_id, [])
+            response_by_id[response_id].append(response)
+        self._response_by_id = response_by_id
+        
+    def __iter__(self):
+        for request_id in self.ids:
+            yield self.get(request_id)
+            
+    def get(self, req_id):
+        responses = self._response_by_id.get(req_id, None)
+        if not responses:
+            responses = self._response_by_id.get(None)
+        if not responses or len(responses) == 0:
+            raise KeyError(
+                'Job "%s" does not exist or has already be retrieved.' 
+                % req_id
+            )
+        response = responses.pop(0)
+        validate_response(response)
+        return response['result']
+        
            
 class ClientRequest(object):
     """
@@ -289,10 +316,19 @@ def test_client():
     
     try:
         conn.echo()
-    except Exception:
+    except Exception, e:
         print 'Bad call had necessary exception.'
+        print e.code, e.message
     else:
         print 'ERROR: Did not throw exception for bad call.'
+        
+    try:
+        conn.foobar(5, 6)
+    except Exception, e:
+        print 'Invalid method threw exception.'
+        print e.code, e.message
+    else:
+        print 'ERROR: Did not throw exception for bad method.'
     
     print '============================='
     print "Tests completed successfully."
