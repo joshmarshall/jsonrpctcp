@@ -12,7 +12,7 @@ import socket
 import uuid
 from jsonrpctcp import config
 from jsonrpctcp import history
-from jsonrpctcp.logger import logger
+from jsonrpctcp import logger
 from jsonrpctcp.errors import ProtocolError
 
 try:

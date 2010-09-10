@@ -11,7 +11,7 @@ import types
 import traceback
 from jsonrpctcp.handler import Handler
 from jsonrpctcp import config
-from jsonrpctcp.logger import logger
+from jsonrpctcp import logger
 from jsonrpctcp import history
 from jsonrpctcp.errors import ProtocolError, JSONRPC_ERRORS
 from inspect import isclass

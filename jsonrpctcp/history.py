@@ -1,4 +1,4 @@
-from jsonrpctcp.logger import logger
+from jsonrpctcp import logger
 
 class History(object):
     """

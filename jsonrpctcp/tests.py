@@ -8,7 +8,7 @@ like class translation, etc.
 """
 from jsonrpctcp import connect, config, history
 from jsonrpctcp.server import Server
-from jsonrpctcp.logger import logger
+from jsonrpctcp import logger
 from jsonrpctcp.errors import ProtocolError
 import unittest
 import os

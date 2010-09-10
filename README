@@ -150,6 +150,6 @@ add a handler and set a level to the jsonrpctcp logger. This uses the
 basic python logging module, so it should be fairly familiar:
 
 	import loggging
-	from jsonrpctcp.logger import logger
+	from jsonrpctcp import logger
 	logger.addHandler(logging.StreamHandler()) # sends to stdout
 	logger.setLevel(logging.DEBUG)
