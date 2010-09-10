@@ -69,7 +69,7 @@ class TestCompatibility(unittest.TestCase):
         
     def test_notification(self):
         """ Testing a notification (response should be null) """
-        result = CLIENT._notify.update(1, 2, 3, 4, 5)
+        result = CLIENT._notification.update(1, 2, 3, 4, 5)
         self.assertTrue(result == None)
         request = json.loads(history.request)
         response = history.response
@@ -163,7 +163,7 @@ class TestCompatibility(unittest.TestCase):
     def test_batch(self):
         multicall = CLIENT._batch()
         multicall.sum(1,2,4)
-        multicall._notify.notify_hello(7)
+        multicall._notification.notify_hello(7)
         multicall.subtract(42,23)
         multicall.foo.get(name='myself')
         multicall.get_data()
@@ -224,8 +224,8 @@ class TestCompatibility(unittest.TestCase):
         
     def test_batch_notifications(self): 
         multicall = CLIENT._batch()
-        multicall._notify.notify_sum(1, 2, 4)
-        multicall._notify.notify_hello(7)
+        multicall._notification.notify_sum(1, 2, 4)
+        multicall._notification.notify_hello(7)
         results = multicall()
         result_list = []
         for result in results:

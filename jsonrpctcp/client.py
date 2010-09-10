@@ -44,7 +44,7 @@ class Client(object):
         return request
         
     @property
-    def _notify(self):
+    def _notification(self):
         """
         Returns a specialized version of the ClientRequest object,
         which is prepped for notification.
@@ -216,7 +216,7 @@ class ClientRequest(object):
     def __init__(self, client, namespace='', notify=False, req_id=None):
         self._client = client
         self._namespace = namespace
-        self._notify = notify
+        self._notification = notify
         self._req_id = req_id
         self._params = None
 
@@ -256,7 +256,7 @@ class ClientRequest(object):
         }
         if self._params:
             request['params'] = self._params
-        if not self._notify:
+        if not self._notification:
             request['id'] = self._req_id
         return request
         
@@ -296,13 +296,13 @@ def test_client():
     assert result == value
     print 'Single test completed.'
     
-    result = conn._notify.echo(message='No response!')
+    result = conn._notification.echo(message='No response!')
     assert result == None
     print 'Notify test completed.'
     
     batch = conn._batch()
     batch.tree.echo(message="First!")
-    batch._notify.echo("Skip!")
+    batch._notification.echo("Skip!")
     batch.tree.echo("Last!")
     results = []
     for i in batch():

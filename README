@@ -63,13 +63,13 @@ Client examples:
     # ...and should be 3, except for extremely large values of 2. :)
     
     # Notification example
-    conn._notify.add(5, 6)
+    conn._notification.add(5, 6)
     # Null response, because it's a notification.
     
     # Batch example
     batch = conn._batch()
     batch.add(y=5, x=6)
-    batch._notify.add(6,4)
+    batch._notification.add(6,4)
     batch.namespace.echo("Repeat me!")
     result = batch()
     for i in result:
