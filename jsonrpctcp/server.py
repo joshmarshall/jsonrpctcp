@@ -13,7 +13,8 @@ from jsonrpctcp.handler import Handler
 from jsonrpctcp import config
 from jsonrpctcp import logger
 from jsonrpctcp import history
-from jsonrpctcp.errors import ProtocolError, JSONRPC_ERRORS
+from jsonrpctcp.errors import ProtocolError
+from jsonrpctcp.errors import JSONRPC_ERRORS, EncryptionMissing
 from inspect import isclass
 
 try:
@@ -32,6 +33,8 @@ class Server(object):
     _shutdown = False
 
     def __init__(self, addr, handler=None, pool=10):
+        if config.secret and not config.crypt:
+            raise EncryptionMission('No encrpytion library found.')
         self.addr = addr
         self.socket = None
         self.threads = []
@@ -164,17 +167,32 @@ class ProcessRequest(object):
             total_data += data
             if len(data) < config.buffer: 
                 break
-        history.request = total_data
+        request = total_data
+        response = ''
+        crypt_error = False
+        if config.secret:
+            crypt = config.crypt.new(config.secret)
+            try:
+                request = crypt.decrypt(request)
+            except ValueError:
+                crypt_error = True
+                error = ProtocolError(-32700, 'Could not decrypt request.')
+                response = json.dumps(error.generate_error())
+        history.request = request
         logger.debug('SERVER | REQUEST: %s' % total_data)
         if self.socket_error:
             self.socket.close()
         else:
-            response = self.parse_request(total_data)
+            if not crypt_error:
+                response = self.parse_request(request)
             history.response = response
             logger.debug('SERVER | RESPONSE: %s' % response)
+            if config.secret:
+                length = config.crypt_chunk_size
+                pad_length = length - (len(response) % length)
+                response = crypt.encrypt('%s%s' % (response, ' '*pad_length))
             self.socket.send(response)
         self.socket.close()
-        #history.clear()
 
     def get_data(self):
         """ Retrieves a data chunk from the socket. """
@@ -274,7 +292,6 @@ def generate_response(result, **kwargs):
         response = {'jsonrpc':"2.0", "result":result}
         response.update(kwargs)
         return response
-    
         
 def start_server(host, port, handler):
     """

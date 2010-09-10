@@ -10,11 +10,12 @@ result = conn.tree.method(keyword=arg)
 
 import socket 
 import uuid
+import hashlib
 from jsonrpctcp import config
 from jsonrpctcp import history
 from jsonrpctcp import logger
-from jsonrpctcp.errors import ProtocolError
-
+from jsonrpctcp.errors import ProtocolError, EncryptionMissing
+    
 try:
     import json
 except ImportError:
@@ -30,10 +31,13 @@ class Client(object):
     _request = None
     _response = None
 
-    def __init__(self, addr, batch=False):
+    def __init__(self, addr, **kwargs):
         self._addr = addr
         self._requests = []
-        self.__batch = batch
+        self.__batch = kwargs.get('batch', None)
+        self._key = kwargs.get('key', None)
+        if self._key and not config.crypt:
+            raise EncryptionMissing('No encryption library found.')
         
     def __getattr__(self, key):
         if key.startswith('_'):
@@ -131,6 +135,11 @@ class Client(object):
         # Starting with a clean history
         history.request = message
         logger.debug('CLIENT | REQUEST: %s' % message)
+        if self._key:
+            crypt = config.crypt.new(self._key)
+            length = config.crypt_chunk_size
+            pad_length = length - (len(message) % length)
+            message = crypt.encrypt('%s%s' % (message, ' '*pad_length))
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(config.timeout)
         sock.connect(self._addr)
@@ -152,6 +161,15 @@ class Client(object):
                 if len(response) < config.buffer:
                     break
             sock.close()
+        if self._key:
+            try:
+                response = crypt.decrypt(response)
+            except ValueError:
+                # What exactly is an intuitive response to a poorly- or
+                # not-encrypted response to an encrypted request?
+                raise ProtocolError(-32700, 'Response not encrypted properly.')
+            # Should we do a preliminary json.loads here to verify that the
+            # decryption succeeded?
         logger.debug('CLIENT | RESPONSE: %s' % response)
         history.response = response
         return response
@@ -260,11 +278,11 @@ class ClientRequest(object):
             request['id'] = self._req_id
         return request
         
-def connect(host, port):
+def connect(host, port, key=None):
     """
     This is a wrapper function for the Client class.
     """
-    client = Client((host, port))
+    client = Client((host, port), key=key)
     return client
     
 def validate_response(response):

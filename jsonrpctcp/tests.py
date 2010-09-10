@@ -9,7 +9,7 @@ like class translation, etc.
 from jsonrpctcp import connect, config, history
 from jsonrpctcp.server import Server
 from jsonrpctcp import logger
-from jsonrpctcp.errors import ProtocolError
+from jsonrpctcp.errors import ProtocolError, EncryptionMissing
 import unittest
 import os
 import time
@@ -262,6 +262,27 @@ class TestCompatibility(unittest.TestCase):
         self.assertTrue(verify_request == request)
         self.assertTrue(verify_response == response)
         
+class TestEncryption(unittest.TestCase):
+    
+    def setUp(self):
+        config.secret = '12345abcdef67890'
+    
+    def test_no_encryption(self):
+        crypt = config.crypt
+        config.crypt = None
+        self.assertRaises(
+            EncryptionMissing, connect, 'localhost', 8001, config.secret
+        )
+        config.crypt = crypt
+        
+    def test_encryption(self):
+        client = connect('localhost', 8001, config.secret)
+        result = client.sum(49, 51)
+        self.assertTrue(result == 100)
+        
+    def tearDown(self):
+        config.secret = None
+        
 """ Test Methods """
 def subtract(minuend, subtrahend):
     """ Using the keywords from the JSON-RPC v2 doc """
@@ -282,6 +303,8 @@ def get_data():
 def test_set_up():
     # Because 'setUp' on unittests are called multiple times
     # and starting a server each time is inefficient / a headache
+    
+    # Starting normal server
     server = Server(('', 8000))
     server.add_handler(summation, 'sum')
     server.add_handler(summation, 'notify_sum')
@@ -293,11 +316,19 @@ def test_set_up():
     server_proc = Thread(target=server.serve)
     server_proc.daemon = True
     server_proc.start()
+    
+    #Starting secure server
+    server2 = Server(('', 8001))
+    server2.add_handler(summation, 'sum')
+    server_proc2 = Thread(target=server2.serve)
+    server_proc2.daemon = True
+    server_proc2.start()
+    
     time.sleep(1) # give it time to start up
     #logger.setLevel(logging.DEBUG)
     #logger.addHandler(logging.StreamHandler())
 
 if __name__ == '__main__':
-    server_proc = test_set_up()
+    test_set_up()
     unittest.main()
     

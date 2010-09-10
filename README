@@ -4,7 +4,17 @@ JSONRPCTCP
 This project is just an implementation of the JSON-RPC protocol over
 TCP. It should support most of the JSON-RPC 2.0 specification, but it is 
 not (at this point) backwards-compatible with 1.0, because I don't like it 
-as much. :) It's early on, so feedback is greatly desired.
+as much. :) 
+
+It also supports basic encryption and decryption via pycrypto if it is 
+installed. Alternatively, you can implement your own cipher class as long 
+as it utilizes the 'new', 'encrypt', and 'decrypt' methods in the same
+manner as the Crypto.Cipher classes in the pycrypto library.
+
+It's early on, so feedback is greatly desired. You can hit the 
+Google Groups site at http://groups.google.com/group/jsonrpctcp or
+email jsonrpctcp@googlegroups.com if you have any questions, advice, 
+patches, or just need a friend. :)
 
 JSONRPCTCP is licensed under the Apache Licence, Version 2.0
 (http://www.apache.org/licenses/LICENSE-2.0.html).
@@ -13,6 +23,7 @@ Requirements
 ============
 * Python 2.5+
 * SimpleJSON on Python < 2.6
+* PyCrypto (optional) for encryption support
 
 Installation
 ============
@@ -47,26 +58,45 @@ Start client in another terminal:
 The client terminal should print out a short list of tests it
 performed.
 
+Usage Examples
+==============
+Below, you'll find simple uses of both client and server. I'd love
+to hear feedback on the usability of this interface, and whether
+certain controls / attributes should be more accessible.
+
 Client Usage
 ============
 
 This should be pretty familiar to users of xmlrpclib, with only a few
-name differences.
+name differences. The connect method takes the IP address / machine name,
+the port of the service, and an optional key if encryption is desired. 
+Encryption requires the pycrypto library or a cipher-like class as the
+config.crypt value. See configuration info below for details.
 
 Client examples:
 
     # Simple example
     from jsonrpctcp import connect
     
-    conn = connect('localhost', 8080)
+    conn = connect('localhost', 8001)
+	# Optionally, you can add a third string parameter which is the
+	# encryption key used on the server.
+	conn = connect('localhost', 8001, '12345abcdef67890')
+	# Just use simple dot-syntax to call methods. Don't use a method
+	# that starts with an underscore -- those are automatically private.
     result = conn.add(1, 2)
-    # ...and should be 3, except for extremely large values of 2. :)
+    # ...and should be 3. :)
     
-    # Notification example
+    # Notification example -- it uses the '_notification' attribute
+    # of the client connection to flag that this request doesn't need
+    # a response.
     conn._notification.add(5, 6)
-    # Null response, because it's a notification.
+    # Null response, because it's a notification. It actually closes the
+    # connection after submitting the full request.
     
-    # Batch example
+    # Batch example -- it uses the '_batch' method of the client
+    # connection to return a new, batch-enabled connection. It 
+    # automatically orders the reponses and skips notifications.
     batch = conn._batch()
     batch.add(y=5, x=6)
     batch._notification.add(6,4)
@@ -74,10 +104,33 @@ Client examples:
     result = batch()
     for i in result:
         print i
-    # Should print out 11, and then "Repeat me!", skippinig the notification.
-    
+    # Should print out 11, and then "Repeat me!", skipping the 
+    # notification.
+
     # You can access the request and response data with
-    # conn._response and conn._request -- only AFTER a request is made.
+    # history.request and history.response . These are the
+    # string values after any encryption / decryption, so you'll 
+    # need to use a JSON library to decode them.
+	from jsonrpctcp import history
+	result = conn.sum(5, 6)
+	print history.request
+	>>> {"params": [5, 6], "jsonrpc": "2.0", "method": "sum", "id": 
+	    "2fa1a919-5a14-44a8-bb52-af16757b12ee"}
+	print history.response
+	>>> {"jsonrpc": "2.0", "result": 11, "id": 
+		"2fa1a919-5a14-44a8-bb52-af16757b12ee"}
+	
+	# You can also see the responses via the logger:
+	from jsonrpctcp import logger
+	import logging
+	logger.setLevel(logging.DEBUG)
+	logger.addHandler(logging.StreamHandler())
+	result = conn.sum(5, 6)
+	# The following prints out:
+	CLIENT | REQUEST: {"params": [5, 6], "jsonrpc": "2.0", "method": "sum", 
+		"id": "734941ad-bc30-4572-9e5f-e974fd04ef1c"}
+	CLIENT | RESPONSE: {"jsonrpc": "2.0", "result": 11, "id": 
+		"734941ad-bc30-4572-9e5f-e974fd04ef1c"}
     
 
 Server Usage
@@ -89,27 +142,12 @@ and use that. It threads (not forks) the individual requests for you, but
 if you don't use the start_server() shortcut, you'll have to thread the 
 actual server startup yourself if you want to do anything after it starts.
 
-Server examples:
+All you should need to enable encrypted support is pycrypto installed, and
+to set the config.secret to an appropriate key string. See below for config
+details.
 
-    # Handler example
-    from jsonrpctcp import start_server
-    from jsonrpctcp.handler import Handler
-    import time
-    
-    class NewHandler(Handler):
-        def echo(self, message):
-            return message
-   
-    # This automatically threads the server instance.     
-    server = start_server('localhost', 8080, NewHandler)
-    
-    while True:
-        # Do whatever you need for polling
-        time.sleep(5)
-        
-    ------------------
-        
-    # Handler example
+Server examples:
+    # Function handler example
     from jsonrpctcp.server import Server
     from jsonrpctcp import config
     
@@ -121,17 +159,35 @@ Server examples:
     def echo(message):
         return message
         
-    server = Server(('localhost', 8080))
+    server = Server(('localhost', 8001))
     server.add_handler(add)
     server.add_handler(echo, 'namespace.echo')
-    server.serve()
+    server.serve() # blocks
+        
+    ------------------
+
+	# Class handler example
+    from jsonrpctcp import start_server
+    from jsonrpctcp.handler import Handler
+    import time
+    
+    class NewHandler(Handler):
+        def echo(self, message):
+            return message
+   
+    # This automatically threads the server instance.     
+    server = start_server('localhost', 8001, NewHandler)
+    
+    while True:
+        # Do whatever you need for polling
+        time.sleep(5)
     
     # You'll have to thread the start up yourself this way, if you need it.
     
 Configuration
 =============
 
-There's a simple configuration object that has three attributes. You can
+There's a simple configuration object that has a few attributes. You can
 change them per the following:
 
     from jsonrpctcp import config
@@ -139,6 +195,10 @@ change them per the following:
     config.verbose = True # default is False
     config.timeout = 30 # default is 5
     config.buffer = 4096 # default is 1024
+    config.crypt = DES3 # default is AES if pycrypto is installed
+	config.secret = '12345abcdef67890' 
+	# default is none, 'secret' indicates that the server should
+	# decrypt requests and encrypt responses.
     
 These may not be the best defaults, any thoughts would be appreciated.
 
