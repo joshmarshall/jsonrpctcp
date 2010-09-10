@@ -2,12 +2,11 @@ JSONRPCTCP
 ==========
 
 This project is just an implementation of the JSON-RPC protocol over
-TCP. It should support most of the JSON-RPC 2.0 specification, but it is 
-not (at this point) backwards-compatible with 1.0, because I don't like it 
-as much. :) 
+TCP. It supports the JSON-RPC 2.0 specification, but it is not (at 
+this point) backwards-compatible with 1.0, because I like 2.0 more. :)
 
 It also supports basic encryption and decryption via pycrypto if it is 
-installed. Alternatively, you can implement your own cipher class as long 
+installed. Alternatively, you can wrap your own cipher class as long 
 as it utilizes the 'new', 'encrypt', and 'decrypt' methods in the same
 manner as the Crypto.Cipher classes in the pycrypto library.
 
@@ -42,7 +41,7 @@ file and this README, you can run the tests like so:
 
     python -m jsonrpctcp.tests
 
-If all is well, you should see 12ish tests that ran successfully.
+If all is well, you should see 13ish tests that ran successfully.
 
 Additionally, you can spin up a test server in one terminal
 and run a few test client methods in another with the following
@@ -213,3 +212,10 @@ basic python logging module, so it should be fairly familiar:
 	from jsonrpctcp import logger
 	logger.addHandler(logging.StreamHandler()) # sends to stdout
 	logger.setLevel(logging.DEBUG)
+	
+TODO
+====
+* Replace threaded socket requests with epoll / select fallback.
+* Stabilize and get on PyPI.
+* Add more unit tests.
+* Generally make more awesome.
