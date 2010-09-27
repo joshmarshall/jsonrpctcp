@@ -145,7 +145,7 @@ class Client(object):
         sock.connect(self._addr)
         sock.send(message)
         
-        response = ''
+        responselist = []
         if notify:
             # single notification, we don't need a response.
             sock.close()
@@ -157,10 +157,11 @@ class Client(object):
                     break
                 if not data: 
                     break
-                response += data
-                if len(response) < config.buffer:
+                responselist.append(data)
+                if len(data) < config.buffer:
                     break
             sock.close()
+        response = ''.join(responselist)
         if self._key:
             try:
                 response = crypt.decrypt(response)

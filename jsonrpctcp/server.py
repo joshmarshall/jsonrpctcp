@@ -159,15 +159,15 @@ class ProcessRequest(object):
         self.socket = sock
         self.socket.settimeout(config.timeout)
         self.client_address = addr
-        total_data = ''
+        requestlines = []
         while True:
             data = self.get_data()
             if not data: 
                 break
-            total_data += data
+            requestlines.append(data)
             if len(data) < config.buffer: 
                 break
-        request = total_data
+        request = ''.join(requestlines)
         response = ''
         crypt_error = False
         if config.secret:
@@ -179,7 +179,7 @@ class ProcessRequest(object):
                 error = ProtocolError(-32700, 'Could not decrypt request.')
                 response = json.dumps(error.generate_error())
         history.request = request
-        logger.debug('SERVER | REQUEST: %s' % total_data)
+        logger.debug('SERVER | REQUEST: %s' % request)
         if self.socket_error:
             self.socket.close()
         else:
