@@ -34,7 +34,7 @@ class Server(object):
 
     def __init__(self, addr, handler=None, pool=10):
         if config.secret and not config.crypt:
-            raise EncryptionMission('No encrpytion library found.')
+            raise EncryptionMissing('No encrpytion library found.')
         self.addr = addr
         self.socket = None
         self.threads = []
@@ -55,7 +55,7 @@ class Server(object):
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.socket.bind(self.addr)
-        self.socket.listen(3)
+        self.socket.listen(config.max_queue)
         self.wait()
         
     def wait(self):

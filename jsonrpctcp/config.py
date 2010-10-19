@@ -29,6 +29,8 @@ class Config(object):
         # 'crypt_chunk_size' is the size of the message chunk required 
         # by the cipher.
         self.crypt_chunk_size = 16
+        # Maximum number of queued connections
+        self.max_queue = 10
     
     @classmethod
     def instance(cls):
