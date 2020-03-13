@@ -2,8 +2,11 @@
 This is just the simple config class and singleton for the
 JSONRPCTCP library.
 """
-   
-from ConfigParser import ConfigParser 
+import sys
+if sys.version_info[0] == 2:
+    from ConfigParser import ConfigParser 
+else:
+    from configparser import ConfigParser 
 CONFIG_SECTION = 'jsonrpctcp'
 # For encrypting / decrypting the data on keyed connections.
 try:
