@@ -5,7 +5,7 @@ error codes used by them.
 from jsonrpctcp import config
 import random
 import string
-
+import sys
 JSONRPC_ERRORS = {
     -32700: {'code':-32700, 'message':'Parse error.'},
     -32600: {'code':-32600, 'message':'Invalid request.'},
@@ -16,7 +16,10 @@ JSONRPC_ERRORS = {
 
 # The random characters are used for padding the server error messages 
 # so that it will hopefully be  harder to brute-force a secret key.
-RANDOM_CHARACTERS = string.letters + string.digits
+if sys.version_info[0] == 2:
+    RANDOM_CHARACTERS = string.letters + string.digits
+else:
+    RANDOM_CHARACTERS = string.ascii_letters + string.digits
 RANDOM_STRING_LENGTH = 12
 
 class ProtocolError(Exception):

@@ -2,7 +2,7 @@
 This module holds all of the functions and classes necessary for 
 initiating a JSONRPC-TCP Server.
 """
-
+from __future__ import print_function
 import threading
 import socket
 import time
@@ -335,13 +335,13 @@ def test_server():
     server_thread.daemon = True
     server_thread.start()
     
-    print "Server running: %s:%s" % (host, port)
+    print ("Server running: %s:%s" % (host, port))
     
     try:
         while True:
             time.sleep(0.5)
     except KeyboardInterrupt:
-        print 'Finished.'
+        print('Finished.')
         sys.exit()
     
     
